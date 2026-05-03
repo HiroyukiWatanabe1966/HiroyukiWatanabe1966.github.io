@@ -7,6 +7,7 @@ let characterAction = null;
 let speechBubble = null;
 let speechBubbleText = null;
 let speechBubbleAction = null;
+let lessonSpeakRunId = 0;
 let vrmaAnimationClips = {};
 let vrmaAnimationClipPromises = {};
 let lessonAnimationMixer = null;
@@ -24,13 +25,20 @@ let idleAnimationRequestId = 0;
 const VRMA_BASE_URL = './assets/vrma/';
 const LESSON_ANIMATION_FILES = {
 	'Cross Jumps': 'Cross Jumps.vrma',
+	'Greeting': 'Greeting.vrma',
 	'Hip Hop Dancing': 'Hip Hop Dancing.vrma',
 	'Jump': 'Jump.vrma',
 	'Left Turn': 'Left Turn.vrma',
+	'Model Pose': 'Model Pose.vrma',
+	'Peace Sign': 'Peace Sign.vrma',
 	'Right Turn': 'Right Turn.vrma',
+	'Shoot': 'Shoot.vrma',
+	'Show Body': 'Show Body.vrma',
 	'Slow Run': 'Slow Run.vrma',
-	'Spin In Place': 'Spin In Place.vrma',
+	'Spin towice': 'Spin In Place.vrma',
+	'Spin once': 'Spin once.vrma',
 	'Standing Idle': 'Standing Idle.vrma',
+	'Squat': 'Squat.vrma',
 	'Talking': 'Talking.vrma',
 	'Walking': 'Walking.vrma'
 };
@@ -53,6 +61,7 @@ const SPEECH_BUBBLE_MIN_WIDTH = 320;
 const SPEECH_BUBBLE_MAX_WIDTH = 560;
 const SPEECH_BUBBLE_CHARACTER_WIDTH = 30;
 const SPEECH_BUBBLE_LINE_HEIGHT = 40;
+const SPEECH_BUBBLE_CHARACTER_DELAY_MS = 150;
 const SPEECH_BUBBLE_TAIL_WIDTH = 120;
 const SPEECH_BUBBLE_TAIL_TIP_Y = 36;
 const SPEECH_BUBBLE_TAIL_LEFT = 28;
@@ -77,7 +86,7 @@ const LESSON_CAMERA_MAX_DELTA_SECONDS = 0.05;
 const LESSON_CAMERA_USER_CONTROL_IDLE_MS = 800;
 const LESSON_ROOT_MOTION_POSITION_EPSILON = 0.01;
 const LESSON_ROOT_MOTION_YAW_EPSILON = 0.01;
-const LESSON_ACTION_POSE_TRANSITION_MS = 100;
+const LESSON_ACTION_POSE_TRANSITION_MS = 500;
 const LESSON_HIP_HOP_POSE_TRANSITION_MS = 1000;
 const LESSON_AVATAR_BASE_URL = './assets/VRM/';
 const LESSON_AVATAR_MIN_ID = 0;
@@ -108,7 +117,106 @@ const MIXAMO_TO_VRM_BONES = {
 	RightFoot: 'rightFoot',
 	RightToeBase: 'rightToes'
 };
-const LESSON_POSE_TRANSITION_BONES = Array.from(new Set(Object.values(MIXAMO_TO_VRM_BONES)));
+const J_BIP_TO_VRM_BONES = {
+	J_Bip_C_Hips: 'hips',
+	J_Bip_C_Spine: 'spine',
+	J_Bip_C_Chest: 'chest',
+	J_Bip_C_UpperChest: 'upperChest',
+	J_Bip_C_Neck: 'neck',
+	J_Bip_C_Head: 'head',
+	J_Bip_L_Shoulder: 'leftShoulder',
+	J_Bip_L_UpperArm: 'leftUpperArm',
+	J_Bip_L_LowerArm: 'leftLowerArm',
+	J_Bip_L_Hand: 'leftHand',
+	J_Bip_L_Thumb1: 'leftThumbMetacarpal',
+	J_Bip_L_Thumb2: 'leftThumbProximal',
+	J_Bip_L_Thumb3: 'leftThumbDistal',
+	J_Bip_L_Index1: 'leftIndexProximal',
+	J_Bip_L_Index2: 'leftIndexIntermediate',
+	J_Bip_L_Index3: 'leftIndexDistal',
+	J_Bip_L_Middle1: 'leftMiddleProximal',
+	J_Bip_L_Middle2: 'leftMiddleIntermediate',
+	J_Bip_L_Middle3: 'leftMiddleDistal',
+	J_Bip_L_Ring1: 'leftRingProximal',
+	J_Bip_L_Ring2: 'leftRingIntermediate',
+	J_Bip_L_Ring3: 'leftRingDistal',
+	J_Bip_L_Little1: 'leftLittleProximal',
+	J_Bip_L_Little2: 'leftLittleIntermediate',
+	J_Bip_L_Little3: 'leftLittleDistal',
+	J_Bip_R_Shoulder: 'rightShoulder',
+	J_Bip_R_UpperArm: 'rightUpperArm',
+	J_Bip_R_LowerArm: 'rightLowerArm',
+	J_Bip_R_Hand: 'rightHand',
+	J_Bip_R_Thumb1: 'rightThumbMetacarpal',
+	J_Bip_R_Thumb2: 'rightThumbProximal',
+	J_Bip_R_Thumb3: 'rightThumbDistal',
+	J_Bip_R_Index1: 'rightIndexProximal',
+	J_Bip_R_Index2: 'rightIndexIntermediate',
+	J_Bip_R_Index3: 'rightIndexDistal',
+	J_Bip_R_Middle1: 'rightMiddleProximal',
+	J_Bip_R_Middle2: 'rightMiddleIntermediate',
+	J_Bip_R_Middle3: 'rightMiddleDistal',
+	J_Bip_R_Ring1: 'rightRingProximal',
+	J_Bip_R_Ring2: 'rightRingIntermediate',
+	J_Bip_R_Ring3: 'rightRingDistal',
+	J_Bip_R_Little1: 'rightLittleProximal',
+	J_Bip_R_Little2: 'rightLittleIntermediate',
+	J_Bip_R_Little3: 'rightLittleDistal',
+	J_Bip_L_UpperLeg: 'leftUpperLeg',
+	J_Bip_L_LowerLeg: 'leftLowerLeg',
+	J_Bip_L_Foot: 'leftFoot',
+	J_Bip_L_ToeBase: 'leftToes',
+	J_Bip_R_UpperLeg: 'rightUpperLeg',
+	J_Bip_R_LowerLeg: 'rightLowerLeg',
+	J_Bip_R_Foot: 'rightFoot',
+	J_Bip_R_ToeBase: 'rightToes'
+};
+const VRM_FINGER_BONES = [
+	'leftThumbMetacarpal',
+	'leftThumbProximal',
+	'leftThumbDistal',
+	'leftIndexProximal',
+	'leftIndexIntermediate',
+	'leftIndexDistal',
+	'leftMiddleProximal',
+	'leftMiddleIntermediate',
+	'leftMiddleDistal',
+	'leftRingProximal',
+	'leftRingIntermediate',
+	'leftRingDistal',
+	'leftLittleProximal',
+	'leftLittleIntermediate',
+	'leftLittleDistal',
+	'rightThumbMetacarpal',
+	'rightThumbProximal',
+	'rightThumbDistal',
+	'rightIndexProximal',
+	'rightIndexIntermediate',
+	'rightIndexDistal',
+	'rightMiddleProximal',
+	'rightMiddleIntermediate',
+	'rightMiddleDistal',
+	'rightRingProximal',
+	'rightRingIntermediate',
+	'rightRingDistal',
+	'rightLittleProximal',
+	'rightLittleIntermediate',
+	'rightLittleDistal'
+];
+const LESSON_POSE_TRANSITION_BONES = Array.from(new Set(
+	Object.values(MIXAMO_TO_VRM_BONES)
+		.concat(Object.values(J_BIP_TO_VRM_BONES))
+		.concat(VRM_FINGER_BONES)
+));
+// アクション追加時の注意:
+// 新しいアクションが独自の開始姿勢を持つ場合は getLessonStepStartPose に追加し、
+// すべてのアクションのつなぎ目で 500ms 補間される状態を保つこと。
+// main.js 側で姿勢や位置を変える基本アクションは、ここへ登録すると Standing Idle の開始姿勢へ補間される。
+const LESSON_BASIC_ACTION_START_POSE_TYPES = [
+	'stepForward',
+	'stepBack',
+	'bow'
+];
 
 window.addEventListener('DOMContentLoaded', () => {
 	const startActionButton = document.getElementById('startActionButton');
@@ -131,7 +239,7 @@ function startCharacterAction() {
 	}
 
 	stopLessonIdleAnimation();
-	hideSpeechBubble();
+	hideNonLessonSpeakBubble();
 
 	const spine = currentVrm.humanoid.getNormalizedBoneNode('spine');
 	const chest = currentVrm.humanoid.getNormalizedBoneNode('chest');
@@ -169,6 +277,10 @@ function updateCharacterAction() {
 		return;
 	}
 
+	if (step.completing) {
+		return;
+	}
+
 	if (step.type === 'walkForward' || step.type === 'walkBack') {
 		return;
 	}
@@ -202,35 +314,27 @@ function updateCharacterAction() {
 
 	if (step.type === 'speak') {
 		if (!step.bubbleShown) {
-			const message = step.message || 'こんにちは！';
-			const typeDurationMs = getNumber(step.typeDurationMs, 1800);
-			startLessonIdleAnimation({
-				allowDuringAction: true,
-				animationName: LESSON_SPEAK_ANIMATION_NAME,
-				step: step
-			});
-			showSpeechBubbleMessage(message, typeDurationMs, Number.POSITIVE_INFINITY);
-			pauseSpeechBubbleText();
-			step.speechFinished = false;
-			speakLessonMessage(message, getNumber(step.rate, 1.25), () => {
-				step.speechFinished = true;
-			}, () => {
-				startSpeechBubbleText();
-			});
-			step.bubbleShown = true;
+			const waitMode = getLessonSpeakWaitMode(step);
+
+			startLessonSpeakStep(step, waitMode);
+
+			if (waitMode === 0) {
+				completeLessonStep(step);
+			}
+
 			return;
 		}
 
 		if (step.speechFinished && (!speechBubbleAction || speechBubbleAction.fullTextTime !== null)) {
 			stopLessonIdleAnimation();
-			hideSpeechBubble();
+			hideSpeechBubbleForRun(step.speechRunId);
 			completeLessonStep(step);
 		}
 
 		return;
 	}
 
-	if (step.type === 'effect') {
+	if (isLessonEffectStep(step)) {
 		updateEffectLessonStep(step);
 		return;
 	}
@@ -288,8 +392,8 @@ function startNextLessonStep() {
 		return;
 	}
 
-	if (step.type === 'effect') {
-		step.effectElement = createLessonEffectElement(step.color || characterAction.settings.effectColor);
+	if (isLessonEffectStep(step)) {
+		step.effectElement = createLessonEffectElement(step);
 		return;
 	}
 
@@ -338,14 +442,16 @@ function transitionToNextLessonStep(previousStep, onFinished) {
 		return;
 	}
 
-	getNextLessonStepStartPose()
+	const nextStep = getNextLessonStep();
+
+	getLessonStepStartPose(nextStep)
 		.then((targetPose) => {
 			if (!targetPose || targetPose.length === 0) {
 				onFinished();
 				return;
 			}
 
-			startLessonPoseTransition(sourcePose, targetPose, onFinished, getLessonPoseTransitionDuration(previousStep));
+			startLessonPoseTransition(sourcePose, targetPose, onFinished, getLessonPoseTransitionDuration(previousStep, nextStep));
 		})
 		.catch((error) => {
 			console.error('Failed to prepare next action pose transition:', error);
@@ -353,7 +459,7 @@ function transitionToNextLessonStep(previousStep, onFinished) {
 		});
 }
 
-function getLessonPoseTransitionDuration(previousStep) {
+function getLessonPoseTransitionDuration(previousStep, nextStep) {
 	if (
 		previousStep &&
 		previousStep.type === 'vrmaAnimation' &&
@@ -365,19 +471,29 @@ function getLessonPoseTransitionDuration(previousStep) {
 	return LESSON_ACTION_POSE_TRANSITION_MS;
 }
 
-function getNextLessonStepStartPose() {
+function getNextLessonStep() {
 	if (!characterAction) {
-		return Promise.resolve(null);
+		return null;
 	}
 
-	const nextStep = characterAction.sequence[characterAction.stepIndex + 1] || null;
+	return characterAction.sequence[characterAction.stepIndex + 1] || null;
+}
 
+function getLessonStepStartPose(nextStep) {
 	if (!nextStep) {
 		return captureLessonAnimationStartPose(LESSON_IDLE_ANIMATION_NAME, 'forward');
 	}
 
 	if (nextStep.type === 'speak') {
-		return captureLessonAnimationStartPose(LESSON_SPEAK_ANIMATION_NAME, 'forward');
+		if (getLessonSpeakWaitMode(nextStep) === 1) {
+			return captureLessonAnimationStartPose(LESSON_SPEAK_ANIMATION_NAME, 'forward');
+		}
+
+		return captureLessonCurrentPoseAsStartPose();
+	}
+
+	if (isLessonBasicActionStartPoseStep(nextStep)) {
+		return captureLessonBasicActionStartPose(nextStep);
 	}
 
 	if (nextStep.type === 'walkForward') {
@@ -392,7 +508,21 @@ function getNextLessonStepStartPose() {
 		return captureLessonAnimationStartPose(nextStep.animation, 'forward');
 	}
 
-	return Promise.resolve(null);
+	return captureLessonCurrentPoseAsStartPose();
+}
+
+function isLessonBasicActionStartPoseStep(step) {
+	return !!(step && LESSON_BASIC_ACTION_START_POSE_TYPES.indexOf(step.type) !== -1);
+}
+
+function captureLessonBasicActionStartPose(step) {
+	return captureLessonAnimationStartPose(LESSON_IDLE_ANIMATION_NAME, 'forward');
+}
+
+function captureLessonCurrentPoseAsStartPose() {
+	const currentPose = captureLessonVrmPose();
+
+	return Promise.resolve(currentPose && currentPose.length > 0 ? currentPose : null);
 }
 
 function captureLessonAnimationStartPose(animationName, direction) {
@@ -466,13 +596,24 @@ function changeLessonAvatar(step, onFinished) {
 		return;
 	}
 
+	const preservedState = captureLessonAvatarChangeState(entity);
+	const preservedCameraState = suspendLessonCameraFollowForAvatarChange();
+
 	stopLessonAnimation();
-	hideSpeechBubble();
+	cancelLessonSpeak();
+	startLessonIdleAnimation({
+		allowDuringAction: true,
+		allowedStepType: 'avatar',
+		animationName: LESSON_IDLE_ANIMATION_NAME,
+		step: step
+	});
 
 	const finish = () => {
 		entity.removeEventListener('vrm-loaded', finish);
 		entity.removeEventListener('vrm-load-error', fail);
 		refreshCharacterActionBones();
+		applyLessonAvatarChangeState(preservedState, entity);
+		restoreLessonCameraFollowAfterAvatarChange(preservedCameraState);
 
 		if (typeof onFinished === 'function') {
 			onFinished();
@@ -482,6 +623,8 @@ function changeLessonAvatar(step, onFinished) {
 		entity.removeEventListener('vrm-loaded', finish);
 		entity.removeEventListener('vrm-load-error', fail);
 		console.error('Avatar change failed:', event.detail && event.detail.error ? event.detail.error : event);
+		stopLessonIdleAnimation();
+		restoreLessonCameraFollowAfterAvatarChange(preservedCameraState);
 
 		if (typeof onFinished === 'function') {
 			onFinished();
@@ -491,6 +634,27 @@ function changeLessonAvatar(step, onFinished) {
 	entity.addEventListener('vrm-loaded', finish);
 	entity.addEventListener('vrm-load-error', fail);
 	entity.setAttribute('vrm-model', 'src', nextSrc);
+}
+
+function captureLessonAvatarChangeState(entity) {
+	return {
+		position: entity.object3D.position.clone(),
+		quaternion: entity.object3D.quaternion.clone(),
+		scale: entity.object3D.scale.clone(),
+		pose: captureLessonVrmPose()
+	};
+}
+
+function applyLessonAvatarChangeState(state, entity) {
+	if (!state || !entity) {
+		return;
+	}
+
+	entity.object3D.position.copy(state.position);
+	entity.object3D.quaternion.copy(state.quaternion);
+	entity.object3D.scale.copy(state.scale);
+	entity.object3D.updateMatrixWorld(true);
+	applyLessonVrmPoseToCurrentAvatar(state.pose);
 }
 
 function getLessonVrmEntity() {
@@ -679,7 +843,8 @@ function normalizeLessonStepType(type) {
 		back: 'stepBack',
 		changeAvatar: 'avatar',
 		avatarChange: 'avatar',
-		flash: 'effect'
+		effect: 'effect0',
+		flash: 'effect0'
 	};
 
 	return aliases[actionType] || actionType;
@@ -714,6 +879,89 @@ function getNumber(value, fallback) {
 	}
 
 	return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function getLessonSpeakWaitMode(step) {
+	return Number(step && step.waitMode) === 0 ? 0 : 1;
+}
+
+function startLessonSpeakStep(step, waitMode) {
+	const message = step.message || 'こんにちは！';
+	const typeDurationMs = getNumber(step.typeDurationMs, SPEECH_BUBBLE_CHARACTER_DELAY_MS);
+	const runId = lessonSpeakRunId + 1;
+
+	step.speechRunId = runId;
+	step.speechFinished = false;
+	step.bubbleShown = true;
+
+	startLessonSpeakOutput(message, getNumber(step.rate, 1.8), typeDurationMs, {
+		runId: runId,
+		autoHideOnComplete: waitMode === 0
+	});
+
+	if (waitMode === 1) {
+		startLessonIdleAnimation({
+			allowDuringAction: true,
+			animationName: LESSON_SPEAK_ANIMATION_NAME,
+			step: step
+		});
+	}
+}
+
+function startLessonSpeakOutput(message, rate, typeDurationMs, options) {
+	const settings = options || {};
+	const runId = settings.runId || lessonSpeakRunId + 1;
+
+	lessonSpeakRunId = runId;
+	showSpeechBubbleMessage(message, typeDurationMs, Number.POSITIVE_INFINITY, {
+		runId: runId,
+		autoHideOnComplete: !!settings.autoHideOnComplete,
+		speechFinished: false
+	});
+	pauseSpeechBubbleText(runId);
+	speakLessonMessage(message, rate, () => {
+		markLessonSpeakFinished(runId);
+	}, () => {
+		startSpeechBubbleText(runId);
+	});
+
+	return runId;
+}
+
+function markLessonSpeakFinished(runId) {
+	if (!isCurrentLessonSpeakRun(runId)) {
+		return;
+	}
+
+	speechBubbleAction.speechFinished = true;
+
+	if (speechBubbleAction.autoHideOnComplete && speechBubbleAction.fullTextTime !== null) {
+		hideSpeechBubbleForRun(runId);
+	}
+
+	if (characterAction && characterAction.activeStep && characterAction.activeStep.speechRunId === runId) {
+		characterAction.activeStep.speechFinished = true;
+	}
+}
+
+function isCurrentLessonSpeakRun(runId) {
+	return !!(speechBubbleAction && speechBubbleAction.runId === runId && lessonSpeakRunId === runId);
+}
+
+function isLessonSpeakBubbleActive() {
+	return !!(speechBubbleAction && speechBubbleAction.runId !== null && speechBubbleAction.runId === lessonSpeakRunId);
+}
+
+function cancelLessonSpeak() {
+	lessonSpeakRunId += 1;
+	cancelLessonSpeechSynthesis();
+	hideSpeechBubble();
+}
+
+function cancelLessonSpeechSynthesis() {
+	if (typeof window !== 'undefined' && window.speechSynthesis) {
+		window.speechSynthesis.cancel();
+	}
 }
 
 function speakLessonMessage(message, rate, onFinished, onStarted) {
@@ -759,7 +1007,7 @@ function speakLessonMessage(message, rate, onFinished, onStarted) {
 	utterance.onstart = start;
 	utterance.onend = finish;
 	utterance.onerror = finish;
-	window.speechSynthesis.cancel();
+	cancelLessonSpeechSynthesis();
 	window.speechSynthesis.speak(utterance);
 }
 
@@ -780,7 +1028,119 @@ function isLessonSmartphoneBrowser() {
 	return /Mobi|Android.*Mobile|iPhone|iPod|Windows Phone|IEMobile|BlackBerry|BB10|Opera Mini/i.test(userAgent);
 }
 
-function createLessonEffectElement(color) {
+function isLessonEffectStep(step) {
+	return !!(step && (
+		step.type === 'effect0' ||
+		step.type === 'effect1' ||
+		step.type === 'effect2'
+	));
+}
+
+function createLessonEffectElement(step) {
+	const type = getLessonEffectType(step);
+	const color = step.color || characterAction.settings.effectColor;
+	const durationMs = getNumber(step.durationMs, 1400);
+
+	if (type === 'effect0') {
+		return createLessonHologramScanEffect(color, durationMs);
+	}
+
+	if (type === 'effect1') {
+		return createLessonEnergyBurstEffect(color, durationMs);
+	}
+
+	if (type === 'effect2') {
+		return createLessonShockwaveEffect(color, durationMs);
+	}
+
+	return createLessonHologramScanEffect(color, durationMs);
+}
+
+function getLessonEffectType(step) {
+	if (step && (step.type === 'effect1' || step.type === 'effect2')) {
+		return step.type;
+	}
+
+	return 'effect0';
+}
+
+function createLessonHologramScanEffect(color, durationMs) {
+	const root = createLessonWorldEffectRoot('body');
+
+	if (!root) {
+		return createLessonScreenFallbackEffect(color);
+	}
+
+	const scanDuration = Math.max(durationMs, 900);
+
+	root.setAttribute('animation__spin', 'property: rotation; to: 0 360 0; dur: ' + scanDuration + '; easing: linear');
+
+	createLessonAframeElement('a-light', {
+		light: 'type: point; color: ' + color + '; intensity: 1.8; distance: 3.8',
+		position: '0 0.95 0',
+		animation__fade: 'property: light.intensity; from: 1.8; to: 0; dur: ' + scanDuration + '; easing: easeOutQuad'
+	}, root);
+	createLessonAframeElement('a-cylinder', {
+		radius: '0.72',
+		height: '1.9',
+		position: '0 0.95 0',
+		material: getLessonEffectMaterial(color, 0.13),
+		animation__scale: 'property: scale; from: 0.75 0.1 0.75; to: 1 1 1; dur: ' + Math.min(scanDuration, 850) + '; easing: easeOutCubic',
+		animation__fade: 'property: material.opacity; from: 0.13; to: 0; dur: ' + scanDuration + '; easing: easeOutQuad'
+	}, root);
+
+	createLessonScanRing(root, color, '0 0.12 0', '0 1.85 0', 0, scanDuration, 0.84);
+	createLessonScanRing(root, '#ffffff', '0 1.75 0', '0 0.18 0', 150, scanDuration, 0.68);
+	createLessonScanRing(root, color, '0 0.55 0', '0 1.35 0', 300, scanDuration, 0.52);
+
+	const panels = [
+		['0.78 0.65 0', '0 0 0', 0],
+		['-0.78 1.05 0', '0 0 0', 120],
+		['0 0.85 0.78', '0 90 0', 240],
+		['0 1.25 -0.78', '0 90 0', 360]
+	];
+
+	panels.forEach((panel, index) => {
+		const delay = panel[2];
+		const panelDuration = Math.max(420, scanDuration - delay);
+
+		createLessonAframeElement('a-box', {
+			depth: '0.018',
+			height: index % 2 === 0 ? '0.34' : '0.22',
+			width: '0.12',
+			position: panel[0],
+			rotation: panel[1],
+			material: getLessonEffectMaterial(index % 2 === 0 ? '#ffffff' : color, 0.72),
+			animation__float: 'property: position; dir: alternate; loop: true; to: ' + getLessonPanelFloatTarget(panel[0]) + '; dur: 420; delay: ' + delay + '; easing: easeInOutSine',
+			animation__fade: 'property: material.opacity; from: 0.72; to: 0; dur: ' + panelDuration + '; delay: ' + delay + '; easing: easeOutQuad'
+		}, root);
+	});
+
+	updateLessonWorldEffectPosition(root);
+
+	return root;
+}
+
+function createLessonScanRing(parent, color, fromPosition, toPosition, delay, durationMs, radius) {
+	createLessonAframeElement('a-ring', {
+		'radius-inner': radius.toFixed(2),
+		'radius-outer': (radius + 0.025).toFixed(2),
+		position: fromPosition,
+		rotation: '-90 0 0',
+		material: getLessonEffectMaterial(color, 0.8),
+		animation__move: 'property: position; from: ' + fromPosition + '; to: ' + toPosition + '; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeInOutSine',
+		animation__fade: 'property: material.opacity; from: 0.8; to: 0; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeOutQuad'
+	}, parent);
+}
+
+function getLessonPanelFloatTarget(positionText) {
+	const values = positionText.split(' ').map(Number);
+	values[1] += 0.18;
+
+	return values.map((value) => value.toFixed(2)).join(' ');
+}
+
+function createLessonScreenFallbackEffect(color) {
 	ensureLessonEffectStyles();
 
 	const element = document.createElement('div');
@@ -797,6 +1157,11 @@ function updateLessonEffectPosition(element) {
 		return;
 	}
 
+	if (element.dataset && element.dataset.lessonEffectSpace === 'world') {
+		updateLessonWorldEffectPosition(element);
+		return;
+	}
+
 	const screenPosition = getHeadScreenPosition();
 
 	if (!screenPosition) {
@@ -807,6 +1172,210 @@ function updateLessonEffectPosition(element) {
 	element.style.visibility = 'visible';
 	element.style.left = screenPosition.x + 'px';
 	element.style.top = screenPosition.y + 'px';
+}
+
+function createLessonEnergyBurstEffect(color, durationMs) {
+	const root = createLessonWorldEffectRoot('head');
+
+	if (!root) {
+		return createLessonScreenFallbackEffect(color);
+	}
+
+	const mainDuration = Math.max(durationMs, 300);
+	const pulseDuration = Math.min(mainDuration, 900);
+
+	createLessonAframeElement('a-light', {
+		light: 'type: point; color: ' + color + '; intensity: 2.6; distance: 4.5',
+		position: '0 0 0'
+	}, root);
+	createLessonAframeElement('a-sphere', {
+		radius: '0.09',
+		material: getLessonEffectMaterial(color, 0.95),
+		animation__scale: 'property: scale; from: 0.2 0.2 0.2; to: 2.2 2.2 2.2; dur: ' + pulseDuration + '; easing: easeOutCubic',
+		animation__fade: 'property: material.opacity; from: 0.95; to: 0; dur: ' + pulseDuration + '; easing: easeOutQuad'
+	}, root);
+
+	createLessonEnergyRing(root, color, '0 0 0', 0, mainDuration, 2.8);
+	createLessonEnergyRing(root, '#ffffff', '90 0 0', 90, mainDuration, 2.35);
+	createLessonEnergyRing(root, color, '0 90 0', 180, mainDuration, 2.5);
+
+	const particles = [
+		['0.62 0.24 0.08', 0],
+		['-0.58 0.18 -0.12', 60],
+		['0.26 0.66 -0.18', 120],
+		['-0.18 -0.48 0.36', 180],
+		['0.42 -0.3 -0.44', 240],
+		['-0.36 0.42 0.46', 300]
+	];
+
+	particles.forEach((particle, index) => {
+		const delay = particle[1];
+		const particleDuration = Math.max(320, mainDuration - delay);
+
+		createLessonAframeElement('a-sphere', {
+			radius: index % 2 === 0 ? '0.035' : '0.025',
+			position: '0 0 0',
+			material: getLessonEffectMaterial(index % 2 === 0 ? '#ffffff' : color, 0.9),
+			animation__move: 'property: position; from: 0 0 0; to: ' + particle[0] + '; dur: ' + particleDuration + '; delay: ' + delay + '; easing: easeOutCubic',
+			animation__fade: 'property: material.opacity; from: 0.9; to: 0; dur: ' + particleDuration + '; delay: ' + delay + '; easing: easeOutQuad'
+		}, root);
+	});
+
+	updateLessonWorldEffectPosition(root);
+
+	return root;
+}
+
+function createLessonEnergyRing(parent, color, rotation, delay, durationMs, scaleTo) {
+	createLessonAframeElement('a-ring', {
+		'radius-inner': '0.2',
+		'radius-outer': '0.235',
+		rotation: rotation,
+		material: getLessonEffectMaterial(color, 0.85),
+		animation__scale: 'property: scale; from: 0.25 0.25 0.25; to: ' + scaleTo + ' ' + scaleTo + ' ' + scaleTo + '; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeOutCubic',
+		animation__spin: 'property: rotation; to: ' + rotation.split(' ')[0] + ' ' + (Number(rotation.split(' ')[1]) + 360) + ' ' + rotation.split(' ')[2] + '; dur: ' + durationMs + '; delay: ' + delay + '; easing: linear',
+		animation__fade: 'property: material.opacity; from: 0.85; to: 0; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeOutQuad'
+	}, parent);
+}
+
+function createLessonShockwaveEffect(color, durationMs) {
+	const root = createLessonWorldEffectRoot('ground');
+
+	if (!root) {
+		return createLessonScreenFallbackEffect(color);
+	}
+
+	const mainDuration = Math.max(durationMs, 450);
+	const ringDuration = Math.min(mainDuration, 1100);
+
+	createLessonAframeElement('a-light', {
+		light: 'type: point; color: ' + color + '; intensity: 3.4; distance: 6',
+		position: '0 1.1 0',
+		animation__fade: 'property: light.intensity; from: 3.4; to: 0; dur: ' + ringDuration + '; easing: easeOutQuad'
+	}, root);
+	createLessonAframeElement('a-cylinder', {
+		radius: '0.42',
+		height: '2.4',
+		position: '0 1.15 0',
+		material: getLessonEffectMaterial(color, 0.35),
+		animation__scale: 'property: scale; from: 0.2 0.15 0.2; to: 1.3 1 1.3; dur: ' + ringDuration + '; easing: easeOutCubic',
+		animation__fade: 'property: material.opacity; from: 0.35; to: 0; dur: ' + ringDuration + '; easing: easeOutQuad'
+	}, root);
+
+	createLessonGroundRing(root, color, 0, ringDuration, 4.2);
+	createLessonGroundRing(root, '#ffffff', 130, ringDuration, 3.2);
+	createLessonGroundRing(root, color, 260, ringDuration, 5.0);
+
+	for (let index = 0; index < 8; index += 1) {
+		const angle = index * 45;
+		const radians = THREE.MathUtils.degToRad(angle);
+		const radius = 0.56;
+		const x = Math.sin(radians) * radius;
+		const z = Math.cos(radians) * radius;
+		const bladeDuration = Math.max(360, ringDuration - index * 35);
+
+		createLessonAframeElement('a-cylinder', {
+			radius: index % 2 === 0 ? '0.018' : '0.012',
+			height: '1.3',
+			position: x.toFixed(3) + ' 0.68 ' + z.toFixed(3),
+			rotation: '0 ' + angle + ' 22',
+			material: getLessonEffectMaterial(index % 2 === 0 ? '#ffffff' : color, 0.82),
+			animation__scale: 'property: scale; from: 0.2 0.1 0.2; to: 1.1 1.35 1.1; dur: ' + bladeDuration + '; delay: ' + (index * 35) + '; easing: easeOutBack',
+			animation__fade: 'property: material.opacity; from: 0.82; to: 0; dur: ' + bladeDuration + '; delay: ' + (index * 35) + '; easing: easeOutQuad'
+		}, root);
+	}
+
+	updateLessonWorldEffectPosition(root);
+
+	return root;
+}
+
+function createLessonGroundRing(parent, color, delay, durationMs, scaleTo) {
+	createLessonAframeElement('a-ring', {
+		'radius-inner': '0.32',
+		'radius-outer': '0.38',
+		rotation: '-90 0 0',
+		material: getLessonEffectMaterial(color, 0.82),
+		animation__scale: 'property: scale; from: 0.1 0.1 0.1; to: ' + scaleTo + ' ' + scaleTo + ' ' + scaleTo + '; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeOutCubic',
+		animation__fade: 'property: material.opacity; from: 0.82; to: 0; dur: ' + durationMs + '; delay: ' + delay + '; easing: easeOutQuad'
+	}, parent);
+}
+
+function createLessonWorldEffectRoot(anchor) {
+	const sceneEl = currentVrmEntity && currentVrmEntity.sceneEl
+		? currentVrmEntity.sceneEl
+		: document.querySelector('a-scene');
+
+	if (!sceneEl) {
+		return null;
+	}
+
+	const root = document.createElement('a-entity');
+	root.dataset.lessonEffectSpace = 'world';
+	root.dataset.lessonEffectAnchor = anchor;
+	sceneEl.appendChild(root);
+
+	if (root.object3D) {
+		root.object3D.visible = false;
+	}
+
+	return root;
+}
+
+function createLessonAframeElement(tagName, attributes, parent) {
+	const element = document.createElement(tagName);
+
+	Object.keys(attributes).forEach((name) => {
+		element.setAttribute(name, attributes[name]);
+	});
+
+	parent.appendChild(element);
+
+	return element;
+}
+
+function getLessonEffectMaterial(color, opacity) {
+	return 'color: ' + (color || '#60d8ff') + '; shader: flat; transparent: true; opacity: ' + opacity + '; side: double';
+}
+
+function updateLessonWorldEffectPosition(element) {
+	if (!element.object3D) {
+		return;
+	}
+
+	const worldPosition = getLessonEffectWorldPosition(element.dataset.lessonEffectAnchor);
+
+	if (!worldPosition) {
+		element.object3D.visible = false;
+		return;
+	}
+
+	element.object3D.visible = true;
+	element.object3D.position.copy(worldPosition);
+}
+
+function getLessonEffectWorldPosition(anchor) {
+	if (!currentVrmEntity) {
+		return null;
+	}
+
+	currentVrmEntity.object3D.updateMatrixWorld(true);
+
+	if (anchor === 'ground') {
+		const position = currentVrmEntity.object3D.getWorldPosition(new THREE.Vector3());
+		position.y += 0.04;
+		return position;
+	}
+
+	if (anchor === 'body') {
+		const position = currentVrmEntity.object3D.getWorldPosition(new THREE.Vector3());
+		position.y += 0.04;
+		return position;
+	}
+
+	const position = getHeadWorldPosition();
+	position.y += 0.22;
+	return position;
 }
 
 function removeLessonEffectElement(element) {
@@ -828,30 +1397,31 @@ function ensureLessonEffectStyles() {
 			left: 0;
 			top: 0;
 			z-index: 15;
-			width: 16px;
-			height: 16px;
+			width: 54px;
+			height: 54px;
 			border-radius: 999px;
 			background: var(--lesson-effect-color);
 			box-shadow:
-				0 0 24px 14px var(--lesson-effect-color),
-				42px -28px 0 -2px var(--lesson-effect-color),
-				-34px 22px 0 -4px var(--lesson-effect-color),
-				20px 44px 0 -5px var(--lesson-effect-color);
-			opacity: 0.92;
+				0 0 54px 34px var(--lesson-effect-color),
+				110px -72px 0 -12px var(--lesson-effect-color),
+				-92px 58px 0 -16px var(--lesson-effect-color),
+				48px 116px 0 -18px var(--lesson-effect-color),
+				-118px -36px 0 -20px var(--lesson-effect-color);
+			opacity: 0.88;
 			pointer-events: none;
 			transform: translate(-50%, -50%);
 			transform-origin: center;
-			animation: lessonEffectPulse 700ms ease-in-out infinite alternate;
+			animation: lessonEffectPulse 900ms ease-in-out infinite alternate;
 		}
 
 		@keyframes lessonEffectPulse {
 			from {
-				transform: translate(-50%, -50%) scale(0.8);
-				opacity: 0.6;
+				transform: translate(-50%, -50%) scale(0.75);
+				opacity: 0.55;
 			}
 
 			to {
-				transform: translate(-50%, -50%) scale(1.25);
+				transform: translate(-50%, -50%) scale(1.55);
 				opacity: 1;
 			}
 		}
@@ -882,12 +1452,13 @@ function applyBowPose(action, amount) {
 	}
 }
 
-function showSpeechBubbleMessage(message, typeDurationMs, hideDelayMs) {
+function showSpeechBubbleMessage(message, typeDurationMs, hideDelayMs, options) {
 	if (!currentVrmEntity) {
 		return;
 	}
 
 	hideSpeechBubble();
+	const settings = options || {};
 
 	const lines = wrapSpeechText(message, 15);
 	const maxLineLength = lines.reduce((max, line) => Math.max(max, Array.from(line).length), 1);
@@ -899,9 +1470,12 @@ function showSpeechBubbleMessage(message, typeDurationMs, hideDelayMs) {
 	speechBubble = createSpeechBubbleElement(width, lines.length);
 
 	speechBubbleAction = {
+		runId: settings.runId === undefined ? null : settings.runId,
 		message: String(message),
 		typeDurationMs: Math.max(typeDurationMs, 0),
 		hideDelayMs: Math.max(hideDelayMs, 0),
+		autoHideOnComplete: !!settings.autoHideOnComplete,
+		speechFinished: !!settings.speechFinished,
 		startTime: performance.now(),
 		waitingForSpeechStart: false,
 		fullTextTime: null,
@@ -927,7 +1501,7 @@ function updateSpeechBubble() {
 	const elapsed = performance.now() - speechBubbleAction.startTime;
 	const visibleCount = speechBubbleAction.typeDurationMs === 0
 		? chars.length
-		: Math.min(chars.length, Math.floor((elapsed / speechBubbleAction.typeDurationMs) * chars.length));
+		: Math.min(chars.length, Math.floor(elapsed / speechBubbleAction.typeDurationMs) + 1);
 
 	if (visibleCount !== speechBubbleAction.lastVisibleCount) {
 		renderSpeechBubbleText(visibleCount);
@@ -939,6 +1513,15 @@ function updateSpeechBubble() {
 	}
 
 	if (
+		speechBubbleAction.autoHideOnComplete &&
+		speechBubbleAction.speechFinished &&
+		speechBubbleAction.fullTextTime !== null
+	) {
+		hideSpeechBubbleForRun(speechBubbleAction.runId);
+		return;
+	}
+
+	if (
 		speechBubbleAction.fullTextTime !== null &&
 		performance.now() - speechBubbleAction.fullTextTime >= speechBubbleAction.hideDelayMs
 	) {
@@ -946,8 +1529,12 @@ function updateSpeechBubble() {
 	}
 }
 
-function pauseSpeechBubbleText() {
+function pauseSpeechBubbleText(runId) {
 	if (!speechBubbleAction) {
+		return;
+	}
+
+	if (runId !== undefined && speechBubbleAction.runId !== runId) {
 		return;
 	}
 
@@ -958,8 +1545,12 @@ function pauseSpeechBubbleText() {
 	renderSpeechBubbleText(0);
 }
 
-function startSpeechBubbleText() {
+function startSpeechBubbleText(runId) {
 	if (!speechBubbleAction || !speechBubbleAction.waitingForSpeechStart) {
+		return;
+	}
+
+	if (runId !== undefined && speechBubbleAction.runId !== runId) {
 		return;
 	}
 
@@ -1187,6 +1778,22 @@ function showSpeechBubble(message) {
 	showSpeechBubbleMessage(message, 0, 5000);
 }
 
+function hideNonLessonSpeakBubble() {
+	if (isLessonSpeakBubbleActive()) {
+		return;
+	}
+
+	hideSpeechBubble();
+}
+
+function hideSpeechBubbleForRun(runId) {
+	if (speechBubbleAction && speechBubbleAction.runId !== runId) {
+		return;
+	}
+
+	hideSpeechBubble();
+}
+
 function hideSpeechBubble() {
 	speechBubbleAction = null;
 	speechBubbleText = null;
@@ -1219,7 +1826,9 @@ function captureLessonAnimationRootMotion() {
 	const quaternion = root.getWorldQuaternion(new THREE.Quaternion());
 
 	return {
+		node: root,
 		position: position,
+		quaternion: quaternion,
 		yaw: getYawFromQuaternion(quaternion)
 	};
 }
@@ -1289,13 +1898,38 @@ function applyLessonAnimationRootMotion(options) {
 		currentVrmEntity.object3D.quaternion.multiply(yawRotation);
 	}
 
+	currentVrmEntity.object3D.updateMatrixWorld(true);
 	lessonAnimationAction.stop();
 	if (shouldResetPose) {
 		resetVrmPoseForAnimation();
 	} else {
+		compensateExtractedLessonRootMotion(preservedPose, end);
 		applyLessonVrmPose(preservedPose);
 	}
 	currentVrmEntity.object3D.updateMatrixWorld(true);
+}
+
+function compensateExtractedLessonRootMotion(pose, rootMotionEnd) {
+	if (!pose || !rootMotionEnd || !rootMotionEnd.node || !rootMotionEnd.node.parent) {
+		return;
+	}
+
+	const rootPose = pose.find((bone) => bone.node === rootMotionEnd.node);
+
+	if (!rootPose) {
+		return;
+	}
+
+	rootMotionEnd.node.parent.updateMatrixWorld(true);
+
+	const localPosition = rootMotionEnd.position.clone();
+	rootMotionEnd.node.parent.worldToLocal(localPosition);
+
+	const parentWorldQuaternion = rootMotionEnd.node.parent.getWorldQuaternion(new THREE.Quaternion());
+	const localQuaternion = parentWorldQuaternion.invert().multiply(rootMotionEnd.quaternion).normalize();
+
+	rootPose.position.copy(localPosition);
+	rootPose.quaternion.copy(localQuaternion);
 }
 
 function getLessonRootMotionNode() {
@@ -1437,8 +2071,81 @@ function completeLessonCameraReturn(returnPose) {
 	lessonCameraFollow = null;
 }
 
+function suspendLessonCameraFollowForAvatarChange() {
+	if (!lessonCameraFollow) {
+		return null;
+	}
+
+	const camera = lessonCameraFollow.camera;
+	camera.updateMatrixWorld(true);
+	lessonCameraFollow.avatarChangeSuspended = true;
+
+	return {
+		position: camera.position.clone(),
+		quaternion: camera.quaternion.clone()
+	};
+}
+
+function restoreLessonCameraFollowAfterAvatarChange(state) {
+	if (!lessonCameraFollow) {
+		return;
+	}
+
+	lessonCameraFollow.avatarChangeSuspended = false;
+
+	if (!state) {
+		return;
+	}
+
+	const camera = lessonCameraFollow.camera;
+	camera.position.copy(state.position);
+	camera.quaternion.copy(state.quaternion);
+	camera.updateMatrixWorld(true);
+	syncLessonCameraLookControls(lessonCameraFollow.cameraEl);
+	resyncLessonCameraFollowFromCurrentCamera();
+}
+
+function resyncLessonCameraFollowFromCurrentCamera() {
+	if (!lessonCameraFollow || !currentVrmEntity) {
+		return;
+	}
+
+	const camera = lessonCameraFollow.camera;
+	const target = getLessonCameraTargetWorldPosition({ speakFraming: isLessonSpeakCameraStep() });
+
+	camera.updateMatrixWorld(true);
+	currentVrmEntity.object3D.updateMatrixWorld(true);
+
+	const cameraWorldPosition = camera.getWorldPosition(new THREE.Vector3());
+	const offset = cameraWorldPosition.clone().sub(target);
+	const distance = Math.max(offset.length(), LESSON_CAMERA_MIN_DISTANCE);
+
+	if (offset.lengthSq() < 0.000001) {
+		offset.set(0, 0.25, 1).normalize().multiplyScalar(distance);
+	}
+
+	const offsetDirection = offset.clone().normalize();
+	const characterWorldQuaternion = currentVrmEntity.object3D.getWorldQuaternion(new THREE.Quaternion());
+	const cameraLocalOffset = offset.clone().applyQuaternion(characterWorldQuaternion.invert());
+
+	lessonCameraFollow.smoothedTarget.copy(target);
+	lessonCameraFollow.offsetDirection.copy(offsetDirection);
+	lessonCameraFollow.stableOffsetDirection.copy(offsetDirection);
+	lessonCameraFollow.normalDistance = distance;
+	lessonCameraFollow.distance = distance;
+	lessonCameraFollow.offsetElevation = clamp(offsetDirection.y, -0.15, 0.35);
+	lessonCameraFollow.offsetLateral = clamp(cameraLocalOffset.x / distance, -0.35, 0.35);
+	lessonCameraFollow.faceForwardYawOffset = getLessonFaceForwardYawOffset();
+	lessonCameraFollow.lastFaceOffsetYaw = getLessonDirectionYaw(offsetDirection);
+	lessonCameraFollow.faceStableTimeMs = 0;
+}
+
 function updateLessonCameraFollow(timeDelta) {
 	if (!lessonCameraFollow) {
+		return;
+	}
+
+	if (lessonCameraFollow.avatarChangeSuspended) {
 		return;
 	}
 
@@ -2210,6 +2917,7 @@ function captureLessonVrmPose() {
 			}
 
 			return {
+				boneName: boneName,
 				node: node,
 				position: node.position.clone(),
 				quaternion: node.quaternion.clone(),
@@ -2225,6 +2933,30 @@ function applyLessonVrmPose(pose) {
 		bone.node.quaternion.copy(bone.quaternion);
 		bone.node.scale.copy(bone.scale);
 	});
+}
+
+function applyLessonVrmPoseToCurrentAvatar(pose) {
+	if (!pose || !currentVrm || !currentVrm.humanoid) {
+		return;
+	}
+
+	pose.forEach((bone) => {
+		if (!bone.boneName) {
+			return;
+		}
+
+		const node = currentVrm.humanoid.getNormalizedBoneNode(bone.boneName);
+
+		if (!node) {
+			return;
+		}
+
+		node.quaternion.copy(bone.quaternion);
+	});
+
+	if (currentVrm.scene) {
+		currentVrm.scene.updateMatrixWorld(true);
+	}
 }
 
 function applyInterpolatedLessonVrmPose(sourcePose, targetPose, progress) {
@@ -2523,7 +3255,9 @@ function createVrmAnimationClipFromVrma(vrmaClip, vrm, sourceScene, clipName) {
 function getVrmBoneName(sourceBoneName) {
 	const mixamoBoneName = sourceBoneName.replace(/^mixamorig[:_]?/, '');
 
-	return MIXAMO_TO_VRM_BONES[mixamoBoneName] || sourceBoneName;
+	return MIXAMO_TO_VRM_BONES[mixamoBoneName] ||
+		J_BIP_TO_VRM_BONES[sourceBoneName] ||
+		sourceBoneName;
 }
 
 function getSourceRestRotation(sourceScene, sourceBoneName) {
@@ -2618,7 +3352,11 @@ function getVrmAnimationScale(vrmaClip, vrm, sourceScene) {
 		vrm.humanoid.normalizedRestPose.hips.position
 		? vrm.humanoid.normalizedRestPose.hips.position[1]
 		: 1;
-	const sourceHips = sourceScene ? sourceScene.getObjectByName('mixamorig:Hips') || sourceScene.getObjectByName('hips') : null;
+	const sourceHips = sourceScene
+		? sourceScene.getObjectByName('mixamorig:Hips') ||
+			sourceScene.getObjectByName('J_Bip_C_Hips') ||
+			sourceScene.getObjectByName('hips')
+		: null;
 	const sourceHipsHeight = sourceHips ? sourceHips.getWorldPosition(new THREE.Vector3()).y : null;
 
 	if (sourceHipsHeight) {
@@ -2646,6 +3384,7 @@ function updateWalkAnimation(timeDelta) {
 function startLessonIdleAnimation(options) {
 	const allowDuringAction = !!(options && options.allowDuringAction);
 	const activeStep = options && options.step ? options.step : null;
+	const allowedStepType = options && options.allowedStepType ? options.allowedStepType : 'speak';
 	const animationName = getLessonAnimationName(options && options.animationName) || LESSON_IDLE_ANIMATION_NAME;
 
 	if (
@@ -2676,7 +3415,11 @@ function startLessonIdleAnimation(options) {
 				!currentVrm ||
 				!currentVrm.scene ||
 				(characterAction && !allowDuringAction) ||
-				(allowDuringAction && (!characterAction || characterAction.activeStep !== activeStep || activeStep.type !== 'speak'))
+				(allowDuringAction && (
+					!characterAction ||
+					characterAction.activeStep !== activeStep ||
+					activeStep.type !== allowedStepType
+				))
 			) {
 				return;
 			}
@@ -2971,7 +3714,7 @@ AFRAME.registerComponent('vrm-model', {
 		currentVrm = null;
 		currentVrmEntity = null;
 		currentVrmModelUrl = null;
-		hideSpeechBubble();
+		cancelLessonSpeak();
 		resetWalkAnimation();
 		stopLessonCameraFollow();
 	},
@@ -3014,13 +3757,6 @@ AFRAME.registerComponent('vrm-model', {
 			return;
 		}
 
-		if (this.model) {
-			this.el.object3D.remove(this.model);
-			this.model = null;
-			this.vrm = null;
-			currentVrmModelUrl = null;
-		}
-
 		const loadId = this.loadId + 1;
 		this.loadId = loadId;
 		this.loadingUrl = modelUrl;
@@ -3055,19 +3791,29 @@ AFRAME.registerComponent('vrm-model', {
 						window.THREE_VRM.VRMUtils.rotateVRM0(vrm);
 					}
 
+					const previousModel = this.model;
+					const nextModel = vrm.scene;
+
+					this.normalizeModel(nextModel);
+
+					nextModel.traverse((object) => {
+						object.frustumCulled = false;
+					});
+
+					stopLessonIdleAnimation({ resetPose: true });
+
+					if (previousModel) {
+						this.el.object3D.remove(previousModel);
+					}
+
 					this.vrm = vrm;
 					currentVrm = vrm;
 					currentVrmEntity = this.el;
 					currentVrmModelUrl = modelUrl;
-					this.model = vrm.scene;
+					this.model = nextModel;
 					this.loadingUrl = null;
 					resetWalkAnimation();
 					refreshCharacterActionBones();
-					this.normalizeModel(this.model);
-
-					this.model.traverse((object) => {
-						object.frustumCulled = false;
-					});
 
 					this.el.object3D.add(this.model);
 					this.el.emit('vrm-loaded', { vrm: vrm });
