@@ -12,10 +12,24 @@ const z = 'z';
 // 詳細は配布した資料で確認してください。
 
 window.lessonActionSettings = {
-    avatar: z,
+	avatar: 2,
+	effectColor: '#ffb347',
 	sequence: [
-		{ type: 'stepForward' , distance: 0.6, durationMs: 700 },
-		{ type: 'speak', message: 'こんにちは！「カワハラ・アイ」です。今日は、私と一緒に、オープンキャンパスを楽しみましょう！' },
-        { type: 'stepBack', distance: 0.6, durationMs: 700 }
+		{ type: 'effect0', color: '#ffb347', durationMs: 1200 },
+		{ type: 'Greeting' },
+		{ type: 'speak', message: 'こんにちは！私はカワハラ・アイです。今日は明るく、楽しく、私らしく自己紹介します！', waitMode: 1 },
+		{ type: 'effect1', color: '#7ee7ff', durationMs: 1000 },
+		{ type: 'speak', message: 'まずは一つ目のダンス！モモとヒメと散歩するときみたいに、元気いっぱい動きます！', waitMode: 0 },
+		{ type: 'Hip Hop Dancing', durationMs: 8000 },
+		{ type: 'speak', message: '二つ目のダンスです！やさしさとねばり強さをこめて、もう一回楽しくいきます！', waitMode: 0 },
+		{ type: 'Breakdance Freezes', durationMs: 8000 },
+		{ type: 'effect2', color: '#ffd86b', durationMs: 1200 },
+		{ type: 'speak', message: '私の好きな時間は、ポメのモモとチワワのヒメとの散歩です。ふたりと歩いていると、毎日が小さな冒険みたいで、自然と笑顔になります。', waitMode: 1 },
+		{ type: 'speak', message: '私の長所は、明るくて人にやさしいところです。それから気が長くて、あまり怒らないところ。まわりの人が安心できる存在になりたいです。', waitMode: 1 },
+		{ type: 'speak', message: 'これからは生成AIの勉強をがんばりたいです。河原電子ビジネス専門学校に入って、新しい技術を学び、楽しいアイデアを形にしていきます！', waitMode: 0 },
+		{ type: 'Walking', durationMs: 6500, speed: 0.32, turnAngle: 18 },
+		{ type: 'Spin once' },
+		{ type: 'speak', message: '明るく、やさしく、全力前進！', waitMode: 0 },
+		{ type: 'Peace Sign', durationMs: 5000 }
 	]
 };
