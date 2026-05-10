@@ -3,11 +3,10 @@
 <head>
 	<meta charset="UTF-8"/>
 	<style>
-		#startActionButton {
+		#startActionButton,
+		#demoActionButton {
 			position: fixed;
-			left: 50%;
 			bottom: 24px;
-			transform: translateX(-50%);
 			z-index: 10;
 			padding: 10px 16px;
 			border: 1px solid #333333;
@@ -17,15 +16,28 @@
 			font-size: 16px;
 			cursor: pointer;
 		}
+		#startActionButton {
+			left: 50%;
+			transform: translateX(-50%);
+		}
+		#demoActionButton {
+			left: 24px;
+		}
+		#demoActionButton:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+		}
 	</style>
 	<script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 	<script src="https://unpkg.com/@pixiv/three-vrm@1.0.0/lib/three-vrm.js"></script>
 	<script src="https://unpkg.com/aframe-environment-component/dist/aframe-environment-component.min.js"></script>
 	<script src="./lesson_actions.js"></script>
+	<script src="./lesson_actions_demo.js"></script>
 	<script src="./main.js"></script>
 </head>
 <body>
+	<button id="demoActionButton" type="button">Demo</button>
 	<button id="startActionButton" type="button">Start Action</button>
 	<a-scene stats loading-screen="dotsColor: gray; backgroundColor: lightgray">
 		<a-assets>

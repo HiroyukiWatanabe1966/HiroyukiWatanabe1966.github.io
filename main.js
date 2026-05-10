@@ -1,9 +1,11 @@
 const THREE = AFRAME.THREE;
+const viewMode = 0; // 0: normal, 1: with frame rate display
 let currentVrm = null;
 let currentVrmEntity = null;
 let currentVrmModelUrl = null;
 let armAction = null;
 let characterAction = null;
+let lessonActionRunMode = null;
 let speechBubble = null;
 let speechBubbleText = null;
 let speechBubbleAction = null;
@@ -24,18 +26,24 @@ let idleAnimationRequestId = 0;
 
 const VRMA_BASE_URL = './assets/vrma/';
 const LESSON_ANIMATION_FILES = {
+	'Backflip': 'Backflip.vrma',
+	'Breakdance Freezes': 'Breakdance Freezes.vrma',
+	'Cartwheel': 'Cartwheel.vrma',
+	'Combo Punch': 'Combo Punch.vrma',
 	'Cross Jumps': 'Cross Jumps.vrma',
+	'Golf Drive': 'Golf Drive.vrma',
 	'Greeting': 'Greeting.vrma',
 	'Hip Hop Dancing': 'Hip Hop Dancing.vrma',
 	'Jump': 'Jump.vrma',
 	'Left Turn': 'Left Turn.vrma',
 	'Model Pose': 'Model Pose.vrma',
+	'Mma Kick': 'Mma Kick.vrma',
 	'Peace Sign': 'Peace Sign.vrma',
 	'Right Turn': 'Right Turn.vrma',
 	'Shoot': 'Shoot.vrma',
 	'Show Body': 'Show Body.vrma',
 	'Slow Run': 'Slow Run.vrma',
-	'Spin towice': 'Spin In Place.vrma',
+	'Spin twice': 'Spin In Place.vrma',
 	'Spin once': 'Spin once.vrma',
 	'Standing Idle': 'Standing Idle.vrma',
 	'Squat': 'Squat.vrma',
@@ -50,8 +58,13 @@ const LESSON_SYNTHETIC_LOCOMOTION = {
 		durationMs: 3000
 	},
 	'Slow Run': {
-		speed: 1.8,
+		speed: 1.2,
 		durationMs: 3000
+	}
+};
+const LESSON_ANIMATION_DEFAULT_OPTIONS = {
+	'Peace Sign': {
+		durationMs: 5000
 	}
 };
 const LESSON_SYNTHETIC_LOCOMOTION_INERTIA_MS = 500;
@@ -59,9 +72,9 @@ const SPEECH_BUBBLE_HEAD_WORLD_UP_OFFSET = 0.12;
 const SPEECH_BUBBLE_FALLBACK_HEAD_HEIGHT = 1.4;
 const SPEECH_BUBBLE_MIN_WIDTH = 320;
 const SPEECH_BUBBLE_MAX_WIDTH = 560;
-const SPEECH_BUBBLE_CHARACTER_WIDTH = 30;
 const SPEECH_BUBBLE_LINE_HEIGHT = 40;
-const SPEECH_BUBBLE_CHARACTER_DELAY_MS = 150;
+const SPEECH_BUBBLE_CHARACTER_DELAY_MS = 110;
+const SPEECH_BUBBLE_COMPLETE_HOLD_MS = 1000;
 const SPEECH_BUBBLE_TAIL_WIDTH = 120;
 const SPEECH_BUBBLE_TAIL_TIP_Y = 36;
 const SPEECH_BUBBLE_TAIL_LEFT = 28;
@@ -219,16 +232,54 @@ const LESSON_BASIC_ACTION_START_POSE_TYPES = [
 ];
 
 window.addEventListener('DOMContentLoaded', () => {
+	applyViewModeFrameRateDisplay();
+
 	const startActionButton = document.getElementById('startActionButton');
+	const demoActionButton = document.getElementById('demoActionButton');
 
 	if (startActionButton) {
 		startActionButton.addEventListener('click', () => {
+			if (characterAction) {
+				stopCharacterAction();
+				return;
+			}
+
 			startCharacterAction();
 		});
 	}
+
+	if (demoActionButton) {
+		demoActionButton.addEventListener('click', () => {
+			if (characterAction) {
+				return;
+			}
+
+			startCharacterAction({
+				mode: 'demo',
+				settings: getLessonActionSettings(window.lessonActionDemoSettings)
+			});
+		});
+	}
+
+	updateLessonActionButtons();
 });
 
-function startCharacterAction() {
+function applyViewModeFrameRateDisplay() {
+	const scene = document.querySelector('a-scene');
+
+	if (!scene) {
+		return;
+	}
+
+	if (viewMode === 1) {
+		scene.setAttribute('stats', '');
+		return;
+	}
+
+	scene.removeAttribute('stats');
+}
+
+function startCharacterAction(options) {
 	if (!currentVrm || !currentVrm.humanoid || !currentVrmEntity) {
 		console.warn('VRM model is not ready yet.');
 		return;
@@ -241,10 +292,11 @@ function startCharacterAction() {
 	stopLessonIdleAnimation();
 	hideNonLessonSpeakBubble();
 
+	const runOptions = options || {};
 	const spine = currentVrm.humanoid.getNormalizedBoneNode('spine');
 	const chest = currentVrm.humanoid.getNormalizedBoneNode('chest');
 	const head = currentVrm.humanoid.getNormalizedBoneNode('head');
-	const settings = getLessonActionSettings();
+	const settings = runOptions.settings || getLessonActionSettings();
 
 	characterAction = {
 		sequence: normalizeLessonSequence(settings.sequence),
@@ -257,12 +309,22 @@ function startCharacterAction() {
 		startPosition: currentVrmEntity.object3D.position.clone(),
 		startQuaternion: currentVrmEntity.object3D.quaternion.clone()
 	};
+	lessonActionRunMode = runOptions.mode || 'main';
 
+	updateLessonActionButtons();
 	startLessonCameraFollow();
-	transitionToNextLessonStep(null, () => {
-		if (characterAction && characterAction.stepIndex === -1) {
-			startNextLessonStep();
+	const startingAction = characterAction;
+
+	applyLessonStartAvatar(settings, () => {
+		if (characterAction !== startingAction || !characterAction || characterAction.stepIndex !== -1) {
+			return;
 		}
+
+		transitionToNextLessonStep(null, () => {
+			if (characterAction === startingAction && characterAction.stepIndex === -1) {
+				startNextLessonStep();
+			}
+		});
 	});
 }
 
@@ -325,7 +387,7 @@ function updateCharacterAction() {
 			return;
 		}
 
-		if (step.speechFinished && (!speechBubbleAction || speechBubbleAction.fullTextTime !== null)) {
+		if (step.speechFinished && isSpeechBubbleCompleteHoldFinished(step.speechRunId)) {
 			stopLessonIdleAnimation();
 			hideSpeechBubbleForRun(step.speechRunId);
 			completeLessonStep(step);
@@ -588,7 +650,7 @@ function changeLessonAvatar(step, onFinished) {
 
 	const componentData = entity.getAttribute('vrm-model') || {};
 
-	if (componentData.src === nextSrc && currentVrm) {
+	if ((componentData.src === nextSrc || currentVrmModelUrl === nextSrc) && currentVrm) {
 		if (typeof onFinished === 'function') {
 			onFinished();
 		}
@@ -634,6 +696,15 @@ function changeLessonAvatar(step, onFinished) {
 	entity.addEventListener('vrm-loaded', finish);
 	entity.addEventListener('vrm-load-error', fail);
 	entity.setAttribute('vrm-model', 'src', nextSrc);
+}
+
+function applyLessonStartAvatar(settings, onFinished) {
+	const startAvatarStep = {
+		type: 'avatar',
+		avatar: settings ? settings.avatar : undefined
+	};
+
+	changeLessonAvatar(startAvatarStep, onFinished);
 }
 
 function captureLessonAvatarChangeState(entity) {
@@ -732,9 +803,11 @@ function refreshCharacterActionBones() {
 function finishCharacterAction() {
 	stopLessonAnimation();
 	characterAction = null;
+	lessonActionRunMode = null;
 	returnLessonCameraToStart();
 	startLowerArmsAction();
 	startLessonIdleAnimation();
+	updateLessonActionButtons();
 }
 
 function prepareStepMoveLessonStep(step) {
@@ -775,7 +848,7 @@ function updateEffectLessonStep(step) {
 	}
 }
 
-function getLessonActionSettings() {
+function getLessonActionSettings(customSettings) {
 	const defaults = {
 		effectColor: '#60d8ff',
 		avatar: 2,
@@ -786,7 +859,7 @@ function getLessonActionSettings() {
 			'stepBack'
 		]
 	};
-	const custom = window.lessonActionSettings || {};
+	const custom = customSettings || window.lessonActionSettings || {};
 
 	return {
 		effectColor: custom.effectColor || defaults.effectColor,
@@ -934,10 +1007,7 @@ function markLessonSpeakFinished(runId) {
 	}
 
 	speechBubbleAction.speechFinished = true;
-
-	if (speechBubbleAction.autoHideOnComplete && speechBubbleAction.fullTextTime !== null) {
-		hideSpeechBubbleForRun(runId);
-	}
+	speechBubbleAction.speechFinishedTime = performance.now();
 
 	if (characterAction && characterAction.activeStep && characterAction.activeStep.speechRunId === runId) {
 		characterAction.activeStep.speechFinished = true;
@@ -1460,14 +1530,8 @@ function showSpeechBubbleMessage(message, typeDurationMs, hideDelayMs, options) 
 	hideSpeechBubble();
 	const settings = options || {};
 
-	const lines = wrapSpeechText(message, 15);
-	const maxLineLength = lines.reduce((max, line) => Math.max(max, Array.from(line).length), 1);
-	const width = Math.min(
-		SPEECH_BUBBLE_MAX_WIDTH,
-		Math.max(SPEECH_BUBBLE_MIN_WIDTH, maxLineLength * SPEECH_BUBBLE_CHARACTER_WIDTH + 56)
-	);
-
-	speechBubble = createSpeechBubbleElement(width, lines.length);
+	const width = getSpeechBubbleWidth();
+	speechBubble = createSpeechBubbleElement(width, message);
 
 	speechBubbleAction = {
 		runId: settings.runId === undefined ? null : settings.runId,
@@ -1476,6 +1540,7 @@ function showSpeechBubbleMessage(message, typeDurationMs, hideDelayMs, options) 
 		hideDelayMs: Math.max(hideDelayMs, 0),
 		autoHideOnComplete: !!settings.autoHideOnComplete,
 		speechFinished: !!settings.speechFinished,
+		speechFinishedTime: settings.speechFinished ? performance.now() : null,
 		startTime: performance.now(),
 		waitingForSpeechStart: false,
 		fullTextTime: null,
@@ -1514,8 +1579,7 @@ function updateSpeechBubble() {
 
 	if (
 		speechBubbleAction.autoHideOnComplete &&
-		speechBubbleAction.speechFinished &&
-		speechBubbleAction.fullTextTime !== null
+		isSpeechBubbleCompleteHoldFinished(speechBubbleAction.runId)
 	) {
 		hideSpeechBubbleForRun(speechBubbleAction.runId);
 		return;
@@ -1527,6 +1591,27 @@ function updateSpeechBubble() {
 	) {
 		hideSpeechBubble();
 	}
+}
+
+function isSpeechBubbleCompleteHoldFinished(runId) {
+	if (!speechBubbleAction) {
+		return true;
+	}
+
+	if (runId !== undefined && speechBubbleAction.runId !== runId) {
+		return true;
+	}
+
+	if (!speechBubbleAction.speechFinished || speechBubbleAction.fullTextTime === null) {
+		return false;
+	}
+
+	const speechFinishedTime = speechBubbleAction.speechFinishedTime === null || speechBubbleAction.speechFinishedTime === undefined
+		? speechBubbleAction.fullTextTime
+		: speechBubbleAction.speechFinishedTime;
+	const completeTime = Math.max(speechBubbleAction.fullTextTime, speechFinishedTime);
+
+	return performance.now() - completeTime >= SPEECH_BUBBLE_COMPLETE_HOLD_MS;
 }
 
 function pauseSpeechBubbleText(runId) {
@@ -1568,12 +1653,11 @@ function renderSpeechBubbleText(visibleCount) {
 
 	const state = speechBubbleAction;
 	const visibleText = Array.from(state.message).slice(0, visibleCount).join('');
-	const visibleLines = wrapSpeechText(visibleText, 15);
 
-	speechBubbleText.textContent = visibleLines.join('\n');
+	speechBubbleText.textContent = visibleText;
 }
 
-function createSpeechBubbleElement(width, lineCount) {
+function createSpeechBubbleElement(width, message) {
 	ensureSpeechBubbleStyles();
 
 	const element = document.createElement('div');
@@ -1584,15 +1668,36 @@ function createSpeechBubbleElement(width, lineCount) {
 	speechBubbleBody.className = 'speech-bubble-body';
 	speechBubbleText = document.createElement('div');
 	speechBubbleText.className = 'speech-bubble-text';
-	speechBubbleText.style.minHeight = Math.max(lineCount, 1) * SPEECH_BUBBLE_LINE_HEIGHT + 'px';
 
 	const speechBubbleTail = createSpeechBubbleTailElement();
 	element.appendChild(speechBubbleTail);
 	speechBubbleBody.appendChild(speechBubbleText);
 	element.appendChild(speechBubbleBody);
 	document.body.appendChild(element);
+	setSpeechBubbleTextMinHeight(message);
 
 	return element;
+}
+
+function getSpeechBubbleWidth() {
+	const viewportWidth = document.documentElement.clientWidth || window.innerWidth || SPEECH_BUBBLE_MAX_WIDTH;
+	const availableWidth = viewportWidth - SPEECH_BUBBLE_SCREEN_MARGIN * 2;
+
+	return Math.max(
+		Math.min(SPEECH_BUBBLE_MIN_WIDTH, availableWidth),
+		Math.min(SPEECH_BUBBLE_MAX_WIDTH, availableWidth)
+	);
+}
+
+function setSpeechBubbleTextMinHeight(message) {
+	if (!speechBubbleText) {
+		return;
+	}
+
+	speechBubbleText.textContent = String(message);
+	const textHeight = Math.ceil(speechBubbleText.scrollHeight);
+	speechBubbleText.style.minHeight = Math.max(textHeight, SPEECH_BUBBLE_LINE_HEIGHT) + 'px';
+	speechBubbleText.textContent = '';
 }
 
 function createSpeechBubbleTailElement() {
@@ -1637,7 +1742,6 @@ function ensureSpeechBubbleStyles() {
 			overflow: visible;
 			pointer-events: none;
 			text-align: left;
-			white-space: pre-line;
 			will-change: transform;
 		}
 
@@ -1653,7 +1757,11 @@ function ensureSpeechBubbleStyles() {
 
 		.speech-bubble-text {
 			display: block;
+			line-break: strict;
+			overflow-wrap: anywhere;
 			text-align: left;
+			white-space: pre-wrap;
+			word-break: normal;
 		}
 
 		.speech-bubble-tail {
@@ -1748,26 +1856,6 @@ function getHeadWorldPosition() {
 	}
 
 	return currentVrmEntity.object3D.localToWorld(new THREE.Vector3(0, SPEECH_BUBBLE_FALLBACK_HEAD_HEIGHT, 0));
-}
-
-function wrapSpeechText(message, maxCharsPerLine) {
-	const lines = [];
-	const paragraphs = String(message).split('\n');
-
-	paragraphs.forEach((paragraph) => {
-		const chars = Array.from(paragraph);
-
-		if (chars.length === 0) {
-			lines.push('');
-			return;
-		}
-
-		for (let index = 0; index < chars.length; index += maxCharsPerLine) {
-			lines.push(chars.slice(index, index + maxCharsPerLine).join(''));
-		}
-	});
-
-	return lines.length > 0 ? lines : [''];
 }
 
 function clamp(value, min, max) {
@@ -2711,7 +2799,7 @@ function getDampingAlpha(damping, dt) {
 
 function playLessonVrmaAnimation(animationName, direction, onFinished, options) {
 	const resolvedAnimationName = getLessonAnimationName(animationName);
-	const animationOptions = getLessonAnimationOptions(options);
+	const animationOptions = getLessonAnimationOptions(options, resolvedAnimationName);
 
 	ensureLessonAnimationClip(animationName)
 		.then((clip) => {
@@ -2935,6 +3023,51 @@ function applyLessonVrmPose(pose) {
 	});
 }
 
+function stopCharacterAction() {
+	if (!characterAction) {
+		updateLessonActionButtons();
+		return;
+	}
+
+	const activeStep = characterAction.activeStep;
+	cleanupLessonActiveStep(activeStep);
+	cancelLessonSpeak();
+	stopLessonAnimation();
+	stopLessonIdleAnimation({ resetPose: true });
+	characterAction = null;
+	lessonActionRunMode = null;
+	returnLessonCameraToStart();
+	startLowerArmsAction();
+	startLessonIdleAnimation();
+	updateLessonActionButtons();
+}
+
+function cleanupLessonActiveStep(step) {
+	if (!step) {
+		return;
+	}
+
+	if (step.effectElement) {
+		removeLessonEffectElement(step.effectElement);
+		step.effectElement = null;
+	}
+}
+
+function updateLessonActionButtons() {
+	const startButton = document.getElementById('startActionButton');
+	const demoButton = document.getElementById('demoActionButton');
+
+	if (startButton) {
+		startButton.textContent = characterAction
+			? (lessonActionRunMode === 'demo' ? 'Stop Demo' : 'Stop')
+			: 'Start Action';
+	}
+
+	if (demoButton) {
+		demoButton.disabled = !!characterAction;
+	}
+}
+
 function applyLessonVrmPoseToCurrentAvatar(pose) {
 	if (!pose || !currentVrm || !currentVrm.humanoid) {
 		return;
@@ -2986,17 +3119,19 @@ function getAnimationDeadline(durationMs) {
 	return performance.now() + duration;
 }
 
-function getLessonAnimationOptions(options) {
+function getLessonAnimationOptions(options, animationName) {
+	const defaultOptions = LESSON_ANIMATION_DEFAULT_OPTIONS[animationName] || {};
+
 	if (options && typeof options === 'object') {
 		return {
-			durationMs: getOptionalNumber(options.durationMs, options.moveTimeMs, options.moveDurationMs, options.timeMs),
+			durationMs: getOptionalNumber(options.durationMs, options.moveTimeMs, options.moveDurationMs, options.timeMs, defaultOptions.durationMs),
 			speed: getOptionalNumber(options.speed, options.moveSpeed),
 			turnAngle: getOptionalNumber(options.turnAngle, options.turnAngleDeg, options.angle, options.yawAngle)
 		};
 	}
 
 	return {
-		durationMs: getOptionalNumber(options),
+		durationMs: getOptionalNumber(options, defaultOptions.durationMs),
 		speed: null,
 		turnAngle: null
 	};
